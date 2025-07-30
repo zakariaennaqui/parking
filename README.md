@@ -1,7 +1,6 @@
 # Plateforme Parking
 
-Une application moderne de gestion de parking construite avec React, Vite, Tailwind CSS et Supabase.
-
+Une application moderne de gestion de parking construite avec React, Vite, Tailwind CSS, Node.js/Express et MongoDB.
 ## Fonctionnalités
 
 - ✅ Inscription des utilisateurs avec génération d'ID unique
@@ -14,7 +13,7 @@ Une application moderne de gestion de parking construite avec React, Vite, Tailw
 ## Technologies utilisées
 
 - **Frontend**: React 19, Vite, Tailwind CSS
-- **Backend**: Supabase (PostgreSQL)
+- **Backend**: Node.js, Express.js, MongoDB
 - **Routing**: React Router DOM
 - **Styling**: Tailwind CSS
 - **ID Generation**: UUID
@@ -32,31 +31,21 @@ cd parking-platform
 npm install
 ```
 
-3. Configuration Supabase
-   - Créer un projet sur [Supabase](https://supabase.com)
-   - Copier `.env.example` vers `.env`
-   - Remplir les variables d'environnement Supabase
+3. Configuration MongoDB
+   - Remplacer `<db_password>` dans le fichier `.env` par votre mot de passe MongoDB
+   - Votre URI MongoDB est déjà configurée
 
-4. Créer la table users dans Supabase
-```sql
-CREATE TABLE users (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  car_plate TEXT NOT NULL,
-  paid BOOLEAN DEFAULT FALSE,
-  payment_method TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Enable RLS
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-
--- Create policy for public access (à adapter selon vos besoins de sécurité)
-CREATE POLICY "Allow all operations" ON users FOR ALL USING (true);
+4. Lancer l'application complète (frontend + backend)
+```bash
+npm run dev:full
 ```
 
-5. Lancer l'application
+Ou séparément :
 ```bash
+# Terminal 1 - Backend
+npm run server
+
+# Terminal 2 - Frontend  
 npm run dev
 ```
 
@@ -70,11 +59,15 @@ src/
 │   ├── UserList.jsx    # Liste des utilisateurs (admin)
 │   ├── SignupForm.jsx  # Formulaire d'inscription
 │   └── Payment.jsx     # Composant de paiement
-├── services/           # Services API
-│   └── supabase.js     # Configuration et services Supabase
+├── services/           # Services API  
+│   └── api.js          # Service API pour MongoDB
 ├── data/              # Données par défaut
 │   └── users.js       # Utilisateurs de test
-└── App.jsx            # Composant principal
+├── App.jsx            # Composant principal
+└── server/            # Backend Node.js
+    ├── models/        # Modèles MongoDB
+    ├── routes/        # Routes API
+    └── server.js      # Serveur Express
 ```
 
 ## Utilisation
@@ -89,30 +82,37 @@ src/
 2. **Gestion**: Voir, ajouter, modifier et supprimer des utilisateurs
 3. **Suivi**: Visualiser les statuts de paiement
 
-## Configuration de la base de données
+## Configuration MongoDB
 
-L'application utilise Supabase comme base de données principale avec un fallback sur le localStorage en cas de problème de connexion.
+L'application utilise MongoDB comme base de données principale avec un fallback sur le localStorage en cas de problème de connexion.
 
-### Schema de la table `users`
-- `id`: Identifiant unique (TEXT)
-- `name`: Nom de l'utilisateur (TEXT)
-- `car_plate`: Matricule du véhicule (TEXT)
-- `paid`: Statut de paiement (BOOLEAN)
-- `payment_method`: Mode de paiement (TEXT, nullable)
-- `created_at`: Date de création (TIMESTAMP)
+### Schema de la collection `users`
+- `id`: Identifiant unique (String)
+- `name`: Nom de l'utilisateur (String)
+- `carPlate`: Matricule du véhicule (String)
+- `paid`: Statut de paiement (Boolean)
+- `paymentMethod`: Mode de paiement (String, nullable)
+- `createdAt`: Date de création (Date)
+- `updatedAt`: Date de modification (Date)
 
 ## Sécurité
 
 - Interface d'administration protégée par mot de passe
 - Validation des données côté client et serveur
 - Gestion des erreurs avec fallback local
-- Row Level Security (RLS) sur Supabase
+- API REST sécurisée avec Express.js
 
 ## Développement
 
 ```bash
+# Lancer frontend + backend
+npm run dev:full
+
 # Lancer en mode développement
 npm run dev
+
+# Lancer seulement le backend
+npm run server
 
 # Build pour la production
 npm run build
@@ -126,6 +126,8 @@ npm run lint
 
 ## Déploiement
 
-L'application peut être déployée sur n'importe quelle plateforme supportant les applications React statiques (Netlify, Vercel, etc.).
+L'application peut être déployée sur :
+- **Frontend**: Netlify, Vercel, etc.
+- **Backend**: Heroku, Railway, DigitalOcean, etc.
 
-N'oubliez pas de configurer les variables d'environnement sur votre plateforme de déploiement.
+N'oubliez pas de configurer les variables d'environnement sur vos plateformes de déploiement.

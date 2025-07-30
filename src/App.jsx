@@ -4,7 +4,7 @@ import UserInfo from './components/UserInfo';
 import Payment from './components/Payment';
 import UserList from './components/UserList';
 import SignupForm from './components/SignupForm';
-import { userService } from './services/supabase';
+import { apiService } from './services/api';
 import defaultUsers from './data/users';
 
 function App() {
@@ -14,6 +14,7 @@ function App() {
   const [usersData, setUsersData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [apiConnected, setApiConnected] = useState(false);
   const [newUser, setNewUser] = useState({
     id: '',
     name: '',
@@ -23,37 +24,42 @@ function App() {
 
   // Charger les utilisateurs au démarrage
   useEffect(() => {
+    checkApiConnection();
     loadUsers();
   }, []);
+
+  const checkApiConnection = async () => {
+    try {
+      await apiService.testConnection();
+      setApiConnected(true);
+      console.log('✅ API connectée');
+    } catch (error) {
+      setApiConnected(false);
+      console.log('❌ API non disponible, mode local activé');
+    }
+  };
 
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const users = await userService.getAllUsers();
       
-      // Si aucun utilisateur en base, utiliser les données par défaut
-      if (users.length === 0) {
-        // Convertir les données par défaut au format de la base
-        const convertedUsers = defaultUsers.map(user => ({
-          ...user,
-          car_plate: user.carPlate,
-          payment_method: user.paymentMethod
-        }));
-        setUsersData(defaultUsers);
+      if (apiConnected) {
+        const users = await apiService.getAllUsers();
+        setUsersData(users);
       } else {
-        // Convertir les données de la base au format de l'app
-        const convertedUsers = users.map(user => ({
-          ...user,
-          carPlate: user.car_plate,
-          paymentMethod: user.payment_method
-        }));
-        setUsersData(convertedUsers);
+        // Fallback sur les données locales
+        const savedUsers = localStorage.getItem('users');
+        const localUsers = savedUsers ? JSON.parse(savedUsers) : defaultUsers;
+        setUsersData(localUsers);
       }
+      
     } catch (err) {
       console.error('Erreur lors du chargement:', err);
-      setError('Erreur de connexion à la base de données');
+      setError('Erreur de connexion au serveur');
       // Utiliser les données par défaut en cas d'erreur
-      setUsersData(defaultUsers);
+      const savedUsers = localStorage.getItem('users');
+      const localUsers = savedUsers ? JSON.parse(savedUsers) : defaultUsers;
+      setUsersData(localUsers);
     } finally {
       setLoading(false);
     }
@@ -63,15 +69,10 @@ function App() {
   const handleSearch = async (id) => {
     try {
       setLoading(true);
-      const foundUser = await userService.getUserById(id);
       
-      if (foundUser) {
-        const convertedUser = {
-          ...foundUser,
-          carPlate: foundUser.car_plate,
-          paymentMethod: foundUser.payment_method
-        };
-        setUser(convertedUser);
+      if (apiConnected) {
+        const foundUser = await apiService.getUserById(id);
+        setUser(foundUser);
       } else {
         // Fallback sur les données locales
         const localUser = usersData.find(u => u.id === id);
@@ -82,12 +83,7 @@ function App() {
       }
     } catch (err) {
       console.error('Erreur lors de la recherche:', err);
-      // Fallback sur les données locales
-      const localUser = usersData.find(u => u.id === id);
-      setUser(localUser || null);
-      if (!localUser) {
-        alert('Utilisateur non trouvé');
-      }
+      alert('Erreur lors de la recherche: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -99,18 +95,13 @@ function App() {
 
     try {
       setLoading(true);
-      const updatedUser = await userService.updateUser(user.id, {
-        paid: true,
-        paymentMethod: method
-      });
-
-      if (updatedUser) {
-        const convertedUser = {
-          ...updatedUser,
-          carPlate: updatedUser.car_plate,
-          paymentMethod: updatedUser.payment_method
-        };
-        setUser(convertedUser);
+      
+      if (apiConnected) {
+        const updatedUser = await apiService.updateUser(user.id, {
+          paid: true,
+          paymentMethod: method
+        });
+        setUser(updatedUser);
       } else {
         // Fallback sur mise à jour locale
         const updatedLocalUser = { ...user, paid: true, paymentMethod: method };
@@ -119,6 +110,7 @@ function App() {
           u.id === user.id ? updatedLocalUser : u
         );
         setUsersData(updatedUsers);
+        localStorage.setItem('users', JSON.stringify(updatedUsers));
       }
 
       // Recharger la liste des utilisateurs
@@ -126,14 +118,7 @@ function App() {
       alert('Paiement enregistré avec succès!');
     } catch (err) {
       console.error('Erreur lors du paiement:', err);
-      // Fallback sur mise à jour locale
-      const updatedLocalUser = { ...user, paid: true, paymentMethod: method };
-      setUser(updatedLocalUser);
-      const updatedUsers = usersData.map(u =>
-        u.id === user.id ? updatedLocalUser : u
-      );
-      setUsersData(updatedUsers);
-      alert('Paiement enregistré localement');
+      alert('Erreur lors du paiement: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -154,18 +139,15 @@ function App() {
     
     try {
       setLoading(true);
-      const createdUser = await userService.createUser(newUser);
       
-      if (createdUser) {
-        const convertedUser = {
-          ...createdUser,
-          carPlate: createdUser.car_plate,
-          paymentMethod: createdUser.payment_method
-        };
-        setUsersData([...usersData, convertedUser]);
+      if (apiConnected) {
+        const createdUser = await apiService.createUser(newUser);
+        setUsersData([...usersData, createdUser]);
       } else {
         // Fallback sur ajout local
+        const updatedUsers = [...usersData, newUser];
         setUsersData([...usersData, newUser]);
+        localStorage.setItem('users', JSON.stringify(updatedUsers));
       }
 
       setNewUser({ id: '', name: '', carPlate: '', paid: false });
@@ -173,10 +155,7 @@ function App() {
       await loadUsers();
     } catch (err) {
       console.error('Erreur lors de l\'ajout:', err);
-      // Fallback sur ajout local
-      setUsersData([...usersData, newUser]);
-      setNewUser({ id: '', name: '', carPlate: '', paid: false });
-      alert('Utilisateur ajouté localement');
+      alert('Erreur lors de l\'ajout: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -190,25 +169,28 @@ function App() {
 
     try {
       setLoading(true);
-      const success = await userService.deleteUser(id);
       
-      if (success) {
+      if (apiConnected) {
+        await apiService.deleteUser(id);
         const updatedUsers = usersData.filter(user => user.id !== id);
         setUsersData(updatedUsers);
         if (user && user.id === id) {
           setUser(null);
         }
         alert('Utilisateur supprimé avec succès!');
+      } else {
+        // Fallback sur suppression locale
+        const updatedUsers = usersData.filter(user => user.id !== id);
+        setUsersData(updatedUsers);
+        localStorage.setItem('users', JSON.stringify(updatedUsers));
+        if (user && user.id === id) {
+          setUser(null);
+        }
+        alert('Utilisateur supprimé localement');
       }
     } catch (err) {
       console.error('Erreur lors de la suppression:', err);
-      // Fallback sur suppression locale
-      const updatedUsers = usersData.filter(user => user.id !== id);
-      setUsersData(updatedUsers);
-      if (user && user.id === id) {
-        setUser(null);
-      }
-      alert('Utilisateur supprimé localement');
+      alert('Erreur lors de la suppression: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -218,25 +200,21 @@ function App() {
   const handleRegister = async (newUserData) => {
     try {
       setLoading(true);
-      const createdUser = await userService.createUser(newUserData);
       
-      if (createdUser) {
-        const convertedUser = {
-          ...createdUser,
-          carPlate: createdUser.car_plate,
-          paymentMethod: createdUser.payment_method
-        };
-        setUsersData([...usersData, convertedUser]);
+      if (apiConnected) {
+        const createdUser = await apiService.createUser(newUserData);
+        setUsersData([...usersData, createdUser]);
       } else {
         // Fallback sur ajout local
+        const updatedUsers = [...usersData, newUserData];
         setUsersData([...usersData, newUserData]);
+        localStorage.setItem('users', JSON.stringify(updatedUsers));
       }
       
       await loadUsers();
     } catch (err) {
       console.error('Erreur lors de l\'inscription:', err);
-      // Fallback sur ajout local
-      setUsersData([...usersData, newUserData]);
+      alert('Erreur lors de l\'inscription: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -266,9 +244,15 @@ function App() {
             />
           </div>
           <h1 className="text-4xl font-bold text-gray-800 mb-2">Plateforme Parking</h1>
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className={`w-3 h-3 rounded-full ${apiConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <span className="text-sm text-gray-600">
+              {apiConnected ? 'Connecté au serveur' : 'Mode local'}
+            </span>
+          </div>
           {error && (
             <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-              {error} - Fonctionnement en mode local
+              {error}
             </div>
           )}
         </div>
